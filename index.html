@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gravity Sandbox — песочница гравитирующих точек</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <header class="panel-head">
+      <h1>Gravity Sandbox</h1>
+      <button id="panel-toggle" type="button" title="Свернуть/развернуть панель">&#10094;</button>
+    </header>
+
+    <div id="panel-body">
+      <section class="group">
+        <h2>Запуск</h2>
+        <div class="row">
+          <button id="btn-play" type="button">Пауза</button>
+          <button id="btn-step" type="button">Шаг</button>
+          <button id="btn-reset" type="button">Сброс</button>
+        </div>
+        <label class="field">
+          <span>Пресет</span>
+          <select id="sel-preset">
+            <option value="solar">Солнечная система</option>
+            <option value="binary">Двойная звезда</option>
+            <option value="chaos">Хаос / скопление</option>
+            <option value="empty">Пусто</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Кисть</h2>
+        <label class="field">
+          <span>Масса <output id="out-mass">20.0</output></span>
+          <input id="rng-mass" type="range" min="-1" max="2" step="0.01" value="1.30103">
+        </label>
+        <label class="field">
+          <span>Радиус</span>
+          <select id="sel-radius">
+            <option value="auto">Авто из массы</option>
+            <option value="manual">Вручную</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Радиус (ручной) <output id="out-radius">6.0</output></span>
+          <input id="rng-radius" type="range" min="1" max="40" step="0.5" value="6" disabled>
+        </label>
+        <label class="field">
+          <span>Цвет</span>
+          <input id="inp-color" type="color" value="#7fd4ff">
+        </label>
+        <label class="field">
+          <span>Режим мыши</span>
+          <select id="sel-mode">
+            <option value="add">add — клик создаёт точку</option>
+            <option value="launch">launch — drag задаёт скорость</option>
+            <option value="drag">drag — перетаскивание</option>
+          </select>
+        </label>
+        <label class="check">
+          <input id="chk-blackhole" type="checkbox">
+          <span>Чёрная дыра</span>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Мир</h2>
+        <label class="field">
+          <span>G <output id="out-g">1.00</output></span>
+          <input id="rng-g" type="range" min="0" max="5" step="0.01" value="1">
+        </label>
+        <label class="field">
+          <span>Скорость <output id="out-speed">1.00</output>x</span>
+          <input id="rng-speed" type="range" min="0" max="4" step="0.01" value="1">
+        </label>
+        <label class="field">
+          <span>Softening &epsilon; <output id="out-soft">4.0</output></span>
+          <input id="rng-soft" type="range" min="0" max="30" step="0.5" value="4">
+        </label>
+        <label class="check"><input id="chk-collide" type="checkbox" checked><span>Слияния при столкновении</span></label>
+        <label class="check"><input id="chk-trails" type="checkbox"><span>Трейлы</span></label>
+        <label class="check"><input id="chk-vectors" type="checkbox"><span>Векторы скорости</span></label>
+        <label class="check"><input id="chk-vectors-a" type="checkbox"><span>Векторы ускорения</span></label>
+        <label class="check"><input id="chk-glows" type="checkbox"><span>Свечение (Canvas 2D)</span></label>
+      </section>
+
+      <section class="group">
+        <h2>Рендерер</h2>
+        <label class="field">
+          <span>Бэкенд</span>
+          <select id="sel-renderer">
+            <option value="2d">Canvas 2D</option>
+            <option value="webgl">WebGL</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Сцена</h2>
+        <div class="row">
+          <button id="btn-save" type="button">Save JSON</button>
+          <button id="btn-load" type="button">Load JSON</button>
+          <button id="btn-clear" type="button">Очистить</button>
+        </div>
+        <input id="inp-load" type="file" accept=".json,application/json" hidden>
+      </section>
+
+      <section class="group">
+        <h2>Инфо</h2>
+        <div class="info"><span>FPS</span><output id="out-fps">—</output></div>
+        <div class="info"><span>Тела</span><output id="out-bodies">0</output></div>
+        <div class="info"><span>Кин. энергия</span><output id="out-ke">0</output></div>
+        <div class="info"><span>Пот. энергия</span><output id="out-pe">0</output></div>
+        <div class="info"><span>Суб-шаги/кадр</span><output id="out-substeps">0</output></div>
+      </section>
+
+      <p class="hint" id="hint">ЛКМ — действие кисти &middot; тащите с «launch» для импульса &middot; панель сворачивается кнопкой &laquo;</p>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <canvas id="canvas"></canvas>
+    <div id="toast" hidden></div>
+  </main>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/presets.js"></script>
+<script src="js/render2d.js"></script>
+<script src="js/renderwebgl.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
