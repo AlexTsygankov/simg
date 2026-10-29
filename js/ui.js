@@ -30,7 +30,7 @@
 
   function cacheEls() {
     var ids = [
-      'panel', 'panel-toggle', 'panel-body',
+      'panel', 'panel-toggle', 'panel-body', 'panel-fab',
       'btn-play', 'btn-step', 'btn-reset', 'sel-preset',
       'rng-mass', 'out-mass', 'sel-radius', 'rng-radius', 'out-radius', 'inp-color',
       'sel-mode', 'chk-blackhole',
@@ -98,30 +98,49 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * Мышь
+   * Ввод: pointer-события (мышь + тач в webview Telegram)
    * ------------------------------------------------------------------ */
 
+  var activePointer = null;
+  var boundCanvas = null;
+
   function eventToWorld(ev) {
-    var rect = ev.target.getBoundingClientRect();
+    var cv = boundCanvas || ev.target;
+    var rect = cv.getBoundingClientRect();
     var sx = ev.clientX - rect.left;
     var sy = ev.clientY - rect.top;
     return GS.view.screenToWorld(sx, sy, {});
   }
 
   function bindCanvas(cv) {
-    cv.addEventListener('mousedown', onMouseDown);
-    cv.addEventListener('mousemove', onMouseMove);
-    cv.addEventListener('mouseup', onMouseUp);
-    cv.addEventListener('mouseleave', onMouseLeave);
+    if (boundCanvas === cv) return;
+    boundCanvas = cv;
+    activePointer = null;
+    cv.addEventListener('pointerdown', onPointerDown);
+    cv.addEventListener('pointermove', onPointerMove);
+    cv.addEventListener('pointerup', onPointerUp);
+    cv.addEventListener('pointercancel', onPointerUp);
+    cv.addEventListener('pointerleave', onPointerLeave);
     cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     cv.addEventListener('wheel', onWheel, { passive: false });
   }
 
-  function onMouseDown(ev) {
+  function onPointerDown(ev) {
     if (ev.button !== 0) return;
+    if (ev.pointerType !== 'touch' && ev.pointerType !== 'pen' && ev.pointerType !== 'mouse') return;
+    // Второй одновременный палец игнорируем — иначе жест «разъедется».
+    if (activePointer !== null) return;
+    activePointer = ev.pointerId;
+    ev.preventDefault();
+
     var scene = GS.main.scene;
     var p = eventToWorld(ev);
     var inWorld = p.x >= 0 && p.x <= scene.width && p.y >= 0 && p.y <= scene.height;
+
+    var cv = boundCanvas;
+    if (cv && cv.setPointerCapture) {
+      try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* не критично */ }
+    }
 
     if (mouseMode === 'drag') {
       var hit = GS.pickBody(scene, p.x, p.y, 4 / GS.view.state.scale);
@@ -136,13 +155,15 @@
         };
         hit.vx = 0;
         hit.vy = 0;
-        ev.target.classList.add('grabbing');
+        if (cv) cv.classList.add('grabbing');
+      } else {
+        activePointer = null;
       }
       return;
     }
 
     if (mouseMode === 'launch') {
-      if (!inWorld) return;
+      if (!inWorld) { activePointer = null; return; }
       launchState = { wx: p.x, wy: p.y, sx: p.x, sy: p.y };
       var cur = GS.main.cursor;
       cur.visible = true;
@@ -153,11 +174,29 @@
 
     // add
     if (inWorld) addBodyAt(p.x, p.y, 0, 0);
+    if (ev.pointerType === 'touch' || ev.pointerType === 'pen') {
+      GS.main.cursor.visible = false;
+    }
+    activePointer = null;
   }
 
-  function onMouseMove(ev) {
+  function onPointerMove(ev) {
+    if (activePointer !== null && ev.pointerId !== activePointer) return;
+
     var p = eventToWorld(ev);
     var cur = GS.main.cursor;
+
+    if (activePointer === null) {
+      // Нет нажатия: у мыши обновляем «призрак» кисти, на тач-экране — нет.
+      if (ev.pointerType !== 'mouse') return;
+      cur.visible = true;
+      cur.x = p.x;
+      cur.y = p.y;
+      cur.color = brush.color;
+      cur.radius = currentBrushRadius();
+      return;
+    }
+
     cur.visible = true;
     cur.x = p.x;
     cur.y = p.y;
@@ -178,12 +217,18 @@
     }
   }
 
-  function onMouseUp(ev) {
-    if (ev.button !== 0) return;
+  function onPointerUp(ev) {
+    if (activePointer !== null && ev.pointerId !== activePointer) return;
+    activePointer = null;
+
+    var cv = boundCanvas;
+    if (cv && cv.releasePointerCapture) {
+      try { cv.releasePointerCapture(ev.pointerId); } catch (e) { /* уже отпущен */ }
+    }
 
     if (dragState) {
       dragState = null;
-      ev.target.classList.remove('grabbing');
+      if (cv) cv.classList.remove('grabbing');
       GS.physics.refreshAccelerations(GS.main.scene);
       return;
     }
@@ -197,10 +242,12 @@
       var cur = GS.main.cursor;
       cur.launchX = null;
       cur.launchY = null;
+      if (ev.pointerType !== 'mouse') cur.visible = false;
     }
   }
 
-  function onMouseLeave() {
+  function onPointerLeave(ev) {
+    if (ev.pointerType !== 'mouse') return;
     var cur = GS.main.cursor;
     cur.visible = false;
     cur.launchX = null;
@@ -208,7 +255,7 @@
     if (launchState) launchState = null;
     if (dragState) {
       dragState = null;
-      if (GS.main.canvas) GS.main.canvas.classList.remove('grabbing');
+      if (boundCanvas) boundCanvas.classList.remove('grabbing');
     }
   }
 
@@ -222,15 +269,53 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * Панель
+   * Панель: вкл/выкл + мобильный оверлей
    * ------------------------------------------------------------------ */
+
+  /** Панель ведёт себя как оверлей — только на узких экранах (см. медиазапрос CSS). */
+  function isOverlayPanel() {
+    return window.matchMedia('(max-width: 720px)').matches;
+  }
+
+  function setPanelCollapsed(collapsed) {
+    els.panel.classList.toggle('collapsed', collapsed);
+    syncPanelFab();
+    // Панель анимируется ~200мс — по окончании просто пересчитываем размеры канваса.
+    setTimeout(function () { GS.main.resize(); }, 220);
+  }
+
+  /**
+   * Кнопка разворота нужна всегда, когда панель скрыта: на мобильном она уезжает
+   * за край, а на десктопе «уезжает» вместе с панелью из-за margin-left.
+   */
+  function syncPanelFab() {
+    if (!els['panel-fab']) return;
+    els['panel-fab'].hidden = !els.panel.classList.contains('collapsed');
+  }
 
   function bindPanel() {
     els['panel-toggle'].addEventListener('click', function () {
-      els.panel.classList.toggle('collapsed');
-      // Панель анимируется ~180мс — по окончании просто пересчитываем размеры канваса.
-      setTimeout(function () { GS.main.resize(); }, 220);
+      setPanelCollapsed(!els.panel.classList.contains('collapsed'));
     });
+
+    if (els['panel-fab']) {
+      els['panel-fab'].addEventListener('click', function () {
+        setPanelCollapsed(false);
+      });
+    }
+
+    // Клик мимо открытой панели на телефоне — закрыть (иначе сцена недоступна).
+    document.addEventListener('pointerdown', function (ev) {
+      if (!els.panel.classList.contains('collapsed') && isOverlayPanel()) {
+        if (!els.panel.contains(ev.target) && !els['panel-fab'].contains(ev.target) &&
+            !els['panel-toggle'].contains(ev.target)) {
+          setPanelCollapsed(true);
+          // Гасим событие, иначе тап «мимо» ещё и поставит тело на сцену.
+          ev.stopPropagation();
+          ev.preventDefault();
+        }
+      }
+    }, true);
 
     els['btn-play'].addEventListener('click', function () {
       var s = GS.main.settings;
@@ -435,6 +520,14 @@
     cacheEls();
     bindPanel();
     syncBrushFromInputs();
+
+    // На телефоне панель стартует свёрнутой, чтобы не закрывать сцену.
+    if (isOverlayPanel()) setPanelCollapsed(true);
+
+    var mq = window.matchMedia('(max-width: 720px)');
+    var onMq = function () { syncPanelFab(); GS.main.resize(); };
+    if (mq.addEventListener) mq.addEventListener('change', onMq);
+    else if (mq.addListener) mq.addListener(onMq);
 
     var cv = GS.main.canvas;
     if (cv) cv.className = 'mode-' + mouseMode;

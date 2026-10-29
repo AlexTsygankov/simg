@@ -2,9 +2,11 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d12">
 <title>Gravity Sandbox — песочница гравитирующих точек</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 <div id="app">
@@ -119,12 +121,13 @@
         <div class="info"><span>Суб-шаги/кадр</span><output id="out-substeps">0</output></div>
       </section>
 
-      <p class="hint" id="hint">ЛКМ — действие кисти &middot; тащите с «launch» для импульса &middot; панель сворачивается кнопкой &laquo;</p>
+      <p class="hint" id="hint">Тап/ЛКМ — действие кисти &middot; тащите с «launch» для импульса &middot; панель сворачивается кнопкой &laquo;</p>
     </div>
   </aside>
 
   <main id="stage">
     <canvas id="canvas"></canvas>
+    <button id="panel-fab" type="button" title="Показать панель" hidden>&#9776;</button>
     <div id="toast" hidden></div>
   </main>
 </div>

@@ -344,12 +344,56 @@
     window.addEventListener('resize', function () {
       resizeCanvas();
     });
+    window.addEventListener('orientationchange', function () {
+      setTimeout(resizeCanvas, 220);
+    });
+
+    setupTelegram();
 
     setRenderer(settings.rendererKind);
 
     lastTime = 0;
     rafId = requestAnimationFrame(frame);
     return scene;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Telegram Mini App
+   * ------------------------------------------------------------------ */
+
+  function setViewportHeightVar(h) {
+    if (h > 0) document.documentElement.style.setProperty('--tg-viewport-stable-height', h + 'px');
+  }
+
+  function setupTelegram() {
+    var wa = window.Telegram && window.Telegram.WebApp;
+    if (!wa) return;
+
+    try {
+      wa.ready();
+      wa.expand();
+      if (wa.disableVerticalSwipes) wa.disableVerticalSwipes();
+      if (wa.setHeaderColor) wa.setHeaderColor('#0a0d12');
+      if (wa.setBackgroundColor) wa.setBackgroundColor('#0a0d12');
+      if (wa.enableClosingConfirmation) wa.enableClosingConfirmation();
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Стабильная высота: на iOS/Android шапка Telegram меняет размер при скролле,
+    // поэтому 100vh без этого «прыгает» и канвас уезжает.
+    var applyHeight = function () {
+      var h = wa.viewportStableHeight || wa.viewportHeight;
+      setViewportHeightVar(h);
+      resizeCanvas();
+    };
+    applyHeight();
+
+    if (wa.onEvent) {
+      wa.onEvent('viewportChanged', applyHeight);
+      wa.onEvent('safeAreaChanged', function () { GS.main.resize(); });
+      wa.onEvent('contentSafeAreaChanged', function () { GS.main.resize(); });
+    }
   }
 
   GS.view = {
